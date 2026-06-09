@@ -41,7 +41,7 @@
     .btn-ghost{background:transparent;color:var(--muted);font-size:12px;padding:6px}.btn-ghost:hover{color:var(--red)}
 
     /* LAYOUT */
-    .app{display:none;height:100vh;display:none;flex-direction:column}
+    .app{height:100vh;flex-direction:column}
     .topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
     .tb-left{display:flex;align-items:center;gap:10px}
     .tb-logo{width:36px;height:36px;border-radius:50%;object-fit:cover;border:1.5px solid var(--red)}
@@ -110,6 +110,36 @@
     .btn-can{background:var(--bg);color:var(--muted);border:1px solid var(--border)}.btn-can:hover{border-color:var(--muted)}
     @media(min-width:640px){.mo{align-items:center;padding:20px}.mo-box{border-radius:16px}}
     @media(max-width:640px){.tb-email{display:none}.main{padding:14px}.stats{grid-template-columns:repeat(2,1fr)}.sc .sv{font-size:18px}}
+
+    /* KPIs */
+    .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:20px}
+    .kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px;position:relative;overflow:hidden}
+    .kpi-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px}
+    .kpi-card.red::before{background:var(--red)}
+    .kpi-card.green::before{background:var(--green)}
+    .kpi-card.orange::before{background:var(--orange)}
+    .kpi-card.blue::before{background:var(--blue)}
+    .kpi-card.yellow::before{background:var(--yellow)}
+    .kpi-card.purple::before{background:var(--purple)}
+    .kpi-name{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5px;color:var(--soft);text-transform:uppercase;margin-bottom:6px}
+    .kpi-val{font-size:26px;font-weight:700;margin-bottom:4px}
+    .kpi-meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+    .kpi-meta span{font-size:11px;color:var(--muted)}
+    .kpi-formula{font-size:11px;color:var(--muted);margin-bottom:10px;font-style:italic}
+    .kpi-bar-wrap{background:var(--card);border-radius:4px;height:6px;overflow:hidden}
+    .kpi-bar{height:6px;border-radius:4px;transition:width .6s ease}
+    .kpi-bar.ok{background:var(--green)}
+    .kpi-bar.warn{background:var(--yellow)}
+    .kpi-bar.bad{background:var(--red)}
+    .kpi-status{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 8px;border-radius:12px;margin-top:8px}
+    .kpi-status.ok{background:var(--green-soft);color:var(--green)}
+    .kpi-status.warn{background:var(--yellow-soft);color:var(--yellow)}
+    .kpi-status.bad{background:var(--red-soft);color:var(--red)}
+    .kpi-input-row{display:flex;gap:8px;align-items:center;margin-top:10px}
+    .kpi-input-row input{flex:1;padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;outline:none}
+    .kpi-input-row input:focus{border-color:var(--red)}
+    .kpi-input-row .btn-sm{padding:7px 12px;font-size:12px}
+    .kpi-section-title{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;color:var(--soft);text-transform:uppercase;letter-spacing:1px;margin:20px 0 12px;padding-left:8px;border-left:3px solid var(--red)}
   </style>
 </head>
 <body>
@@ -129,7 +159,7 @@
 </div>
 
 <!-- ═══════ APP ═══════ -->
-<div class="app" id="app">
+<div class="app" id="app" style="display:none">
   <div class="topbar">
     <div class="tb-left"><img class="tb-logo" id="tbLogo" alt="LI"><div class="tb-brand">LA <span>INDUSTRIA</span></div></div>
     <div class="tb-right"><span class="tb-email" id="userEmail"></span><button class="btn btn-ghost" onclick="doLogout()">Salir</button></div>
@@ -139,6 +169,7 @@
     <button class="nav-btn" onclick="go('ventas',this)">Ventas</button>
     <button class="nav-btn" onclick="go('gastos',this)">Gastos</button>
     <button class="nav-btn" onclick="go('inventario',this)">Inventario</button>
+    <button class="nav-btn" onclick="go('kpis',this)">📊 KPIs</button>
   </div>
   <div class="main">
 
@@ -197,6 +228,29 @@
         </div>
       </div>
       <div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Monto</th><th></th></tr></thead><tbody id="tbGastos"></tbody></table></div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="page" id="p-kpis">
+      <div class="sec-head"><h2>📊 Indicadores Clave (KPIs)</h2></div>
+
+      <p style="font-size:12px;color:var(--muted);margin-bottom:18px">Ingresa los valores actuales para calcular tus KPIs en tiempo real. Los datos se guardan localmente en tu dispositivo.</p>
+
+      <!-- FINANCIEROS -->
+      <div class="kpi-section-title">💰 Financieros</div>
+      <div class="kpi-grid" id="kpiGridFinanciero"></div>
+
+      <!-- OPERACIONES -->
+      <div class="kpi-section-title">⚙️ Operaciones</div>
+      <div class="kpi-grid" id="kpiGridOperaciones"></div>
+
+      <!-- CLIENTE -->
+      <div class="kpi-section-title">⭐ Satisfacción del Cliente</div>
+      <div class="kpi-grid" id="kpiGridCliente"></div>
+
+      <!-- VENTAS -->
+      <div class="kpi-section-title">🛵 Ventas & Canal</div>
+      <div class="kpi-grid" id="kpiGridVentas"></div>
     </div>
 
     <!-- INVENTARIO -->
@@ -534,7 +588,8 @@ window.clearDashDates = () => { $('dashDesde').value=''; $('dashHasta').value=''
 window.go = (p,el) => {
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('on')); el.classList.add('on');
   document.querySelectorAll('.page').forEach(pg=>pg.classList.remove('on')); $('p-'+p).classList.add('on');
-  if(p==='dashboard') renderDash();
+  if(p==='dashboard') setTimeout(()=>renderDash(), 50);
+  if(p==='kpis') renderKPIs();
 };
 window.openMo = id => {
   const hoy = new Date().toISOString().slice(0,10);
@@ -545,6 +600,143 @@ window.openMo = id => {
 };
 window.closeMo = id => $(id).classList.remove('show');
 document.querySelectorAll('.mo').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('show')}));
+
+// ══════════ KPIs ══════════
+const KPI_DEFS = [
+  // FINANCIEROS
+  { id:'foodcost', grupo:'Financiero', nombre:'Food Cost %', formula:'Costo insumos / Ventas × 100',
+    meta:30, unidad:'%', color:'red', freq:'Semanal',
+    inputs:[{id:'fc_costo',label:'Costo insumos ($)',ph:'850000'},{id:'fc_ventas',label:'Ventas totales ($)',ph:'3000000'}],
+    calc: v => v[0]>0&&v[1]>0 ? (v[0]/v[1]*100) : null,
+    status: val => val<=28?'ok':val<=32?'warn':'bad',
+    metaLabel:'Meta: 28%–32%' },
+  { id:'margen', grupo:'Financiero', nombre:'Margen Neto %', formula:'(Ventas - Gastos) / Ventas × 100',
+    meta:20, unidad:'%', color:'green', freq:'Mensual',
+    inputs:[{id:'mn_ventas',label:'Ventas ($)',ph:'3000000'},{id:'mn_gastos',label:'Gastos totales ($)',ph:'2400000'}],
+    calc: v => v[0]>0 ? ((v[0]-v[1])/v[0]*100) : null,
+    status: val => val>=20?'ok':val>=10?'warn':'bad',
+    metaLabel:'Meta: ≥ 20%' },
+  { id:'ticket', grupo:'Financiero', nombre:'Ticket Promedio', formula:'Ventas totales / N° transacciones',
+    meta:25000, unidad:'$', color:'orange', freq:'Diario',
+    inputs:[{id:'tp_ventas',label:'Ventas del período ($)',ph:'3000000'},{id:'tp_trans',label:'N° transacciones',ph:'120'}],
+    calc: v => v[1]>0 ? (v[0]/v[1]) : null,
+    status: val => val>=25000?'ok':val>=18000?'warn':'bad',
+    metaLabel:'Meta: crecimiento 10% trimestral' },
+  { id:'costoNom', grupo:'Financiero', nombre:'Costo Nómina %', formula:'Nómina / Ventas × 100',
+    meta:25, unidad:'%', color:'purple', freq:'Mensual',
+    inputs:[{id:'cn_nom',label:'Costo nómina ($)',ph:'600000'},{id:'cn_ventas',label:'Ventas ($)',ph:'3000000'}],
+    calc: v => v[0]>0&&v[1]>0 ? (v[0]/v[1]*100) : null,
+    status: val => val<=25?'ok':val<=30?'warn':'bad',
+    metaLabel:'Meta: ≤ 25%' },
+
+  // OPERACIONES
+  { id:'tservicio', grupo:'Operaciones', nombre:'Tiempo de Servicio', formula:'Tiempo pedido → entrega',
+    meta:8, unidad:'min', color:'green', freq:'Diario',
+    inputs:[{id:'ts_min',label:'Tiempo promedio (min)',ph:'7'}],
+    calc: v => v[0]>0 ? v[0] : null,
+    status: val => val<=8?'ok':val<=12?'warn':'bad',
+    metaLabel:'Meta: ≤ 8 minutos' },
+  { id:'stockrot', grupo:'Operaciones', nombre:'Rotación Inventario', formula:'Costo ventas / Inventario promedio',
+    meta:4, unidad:'veces', color:'blue', freq:'Mensual',
+    inputs:[{id:'ri_costoVentas',label:'Costo ventas ($)',ph:'900000'},{id:'ri_invProm',label:'Inventario promedio ($)',ph:'200000'}],
+    calc: v => v[1]>0 ? (v[0]/v[1]) : null,
+    status: val => val>=4?'ok':val>=2?'warn':'bad',
+    metaLabel:'Meta: ≥ 4 veces/mes' },
+  { id:'merma', grupo:'Operaciones', nombre:'% Merma', formula:'Merma / Compras × 100',
+    meta:3, unidad:'%', color:'yellow', freq:'Semanal',
+    inputs:[{id:'me_merma',label:'Valor merma ($)',ph:'30000'},{id:'me_compras',label:'Total compras ($)',ph:'900000'}],
+    calc: v => v[1]>0 ? (v[0]/v[1]*100) : null,
+    status: val => val<=3?'ok':val<=6?'warn':'bad',
+    metaLabel:'Meta: ≤ 3%' },
+
+  // CLIENTE
+  { id:'google', grupo:'Cliente', nombre:'Calificación Google', formula:'Promedio reseñas Google',
+    meta:4.5, unidad:'★', color:'yellow', freq:'Mensual',
+    inputs:[{id:'cg_rating',label:'Calificación actual (0-5)',ph:'4.6'}],
+    calc: v => v[0]>0 ? v[0] : null,
+    status: val => val>=4.5?'ok':val>=4.0?'warn':'bad',
+    metaLabel:'Meta: ≥ 4.5 estrellas' },
+  { id:'retencion', grupo:'Cliente', nombre:'% Clientes Recurrentes', formula:'Clientes recurrentes / Total clientes × 100',
+    meta:40, unidad:'%', color:'green', freq:'Mensual',
+    inputs:[{id:'cr_recur',label:'Clientes recurrentes',ph:'48'},{id:'cr_total',label:'Total clientes',ph:'120'}],
+    calc: v => v[1]>0 ? (v[0]/v[1]*100) : null,
+    status: val => val>=40?'ok':val>=25?'warn':'bad',
+    metaLabel:'Meta: ≥ 40%' },
+
+  // VENTAS
+  { id:'upselling', grupo:'Ventas', nombre:'Conversión Upselling', formula:'# upselling aceptados / # pedidos × 100',
+    meta:30, unidad:'%', color:'orange', freq:'Semanal',
+    inputs:[{id:'up_acep',label:'Upselling aceptados',ph:'38'},{id:'up_pedidos',label:'Total pedidos',ph:'120'}],
+    calc: v => v[1]>0 ? (v[0]/v[1]*100) : null,
+    status: val => val>=30?'ok':val>=15?'warn':'bad',
+    metaLabel:'Meta: ≥ 30%' },
+  { id:'ventasTurno', grupo:'Ventas', nombre:'Ventas por Turno', formula:'Ingresos / turno operativo',
+    meta:500000, unidad:'$', color:'red', freq:'Diario',
+    inputs:[{id:'vt_ingresos',label:'Ingresos del turno ($)',ph:'520000'}],
+    calc: v => v[0]>0 ? v[0] : null,
+    status: val => val>=500000?'ok':val>=350000?'warn':'bad',
+    metaLabel:'Meta: crecimiento 5% mensual' },
+  { id:'domVsSitio', grupo:'Ventas', nombre:'% Ventas Domicilio', formula:'Ventas domicilio / Ventas totales × 100',
+    meta:35, unidad:'%', color:'blue', freq:'Semanal',
+    inputs:[{id:'dv_domi',label:'Ventas domicilio ($)',ph:'900000'},{id:'dv_total',label:'Ventas totales ($)',ph:'3000000'}],
+    calc: v => v[1]>0 ? (v[0]/v[1]*100) : null,
+    status: val => val>=30&&val<=50?'ok':val>=20?'warn':'bad',
+    metaLabel:'Meta: 30%–50%' },
+];
+
+let kpiVals = {};
+try { kpiVals = JSON.parse(localStorage.getItem('laindustria_kpis')||'{}'); } catch(e) { kpiVals={}; }
+
+function saveKpiVals() { try { localStorage.setItem('laindustria_kpis', JSON.stringify(kpiVals)); } catch(e){} }
+
+function calcKpiValue(k) {
+  const vals = k.inputs.map(inp => parseFloat(kpiVals[inp.id]||'0')||0);
+  return k.calc(vals);
+}
+
+function renderKPICard(k) {
+  const val = calcKpiValue(k);
+  const st = val!==null ? k.status(val) : 'warn';
+  const stLabel = st==='ok'?'✅ En meta':st==='warn'?'⚠️ Revisar':'❌ Fuera de meta';
+  const disp = val!==null ? (k.unidad==='$' ? fmt(val) : k.unidad==='★' ? val.toFixed(1)+' ★' : val.toFixed(1)+' '+k.unidad) : '—';
+
+  let pct = 0;
+  if(val!==null) {
+    if(k.unidad==='%'||k.unidad==='min'||k.unidad==='veces') {
+      pct = Math.min(100, (val/k.meta)*100);
+    } else {
+      pct = Math.min(100, (val/k.meta)*100);
+    }
+  }
+
+  const inputsHtml = k.inputs.map(inp => `
+    <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:100px">
+      <label style="font-size:10px;color:var(--muted)">${inp.label}</label>
+      <input type="number" id="kpi_inp_${inp.id}" placeholder="${inp.ph}" value="${kpiVals[inp.id]||''}" 
+        oninput="kpiVals['${inp.id}']=this.value;saveKpiVals();renderKPIs()" style="padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:inherit;outline:none;width:100%">
+    </div>`).join('');
+
+  return `<div class="kpi-card ${k.color}">
+    <div class="kpi-name">${k.nombre}</div>
+    <div class="kpi-val ${k.color}">${disp}</div>
+    <div class="kpi-formula">${k.formula}</div>
+    <div class="kpi-bar-wrap"><div class="kpi-bar ${st}" style="width:${pct}%"></div></div>
+    <div class="kpi-status ${st}">${stLabel}</div>
+    <div style="font-size:10px;color:var(--muted);margin-top:4px">${k.metaLabel} · ${k.freq}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${inputsHtml}</div>
+  </div>`;
+}
+
+function renderKPIs() {
+  const grupos = {Financiero:'kpiGridFinanciero', Operaciones:'kpiGridOperaciones', Cliente:'kpiGridCliente', Ventas:'kpiGridVentas'};
+  Object.keys(grupos).forEach(g => {
+    const el = $(grupos[g]);
+    if(!el) return;
+    const cards = KPI_DEFS.filter(k=>k.grupo===g).map(k=>renderKPICard(k)).join('');
+    el.innerHTML = cards;
+  });
+}
+
 </script>
 </body>
 </html>
