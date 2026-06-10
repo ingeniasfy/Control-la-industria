@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -99,7 +100,7 @@
     .chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-bottom:20px}
     .chart-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px}
     .chart-box h3{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;margin-bottom:12px;color:var(--soft)}
-    .chart-box canvas{max-height:250px}
+    .chart-box canvas{width:100%!important;height:250px!important}
 
     /* MODAL */
     .mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:flex-end;justify-content:center}
@@ -234,7 +235,14 @@
     <div class="page" id="p-kpis">
       <div class="sec-head"><h2>📊 Indicadores Clave (KPIs)</h2></div>
 
-      <p style="font-size:12px;color:var(--muted);margin-bottom:18px">Ingresa los valores actuales para calcular tus KPIs en tiempo real. Los datos se guardan localmente en tu dispositivo.</p>
+      <div class="filters" style="align-items:center;margin-bottom:12px">
+        <div class="fg" style="margin:0;flex:1;min-width:130px"><label style="margin-bottom:3px">Período desde</label><input type="date" id="kpiDesde" onchange="onKpiDateChange()" style="padding:8px 10px;font-size:12px"></div>
+        <div class="fg" style="margin:0;flex:1;min-width:130px"><label style="margin-bottom:3px">Período hasta</label><input type="date" id="kpiHasta" onchange="onKpiDateChange()" style="padding:8px 10px;font-size:12px"></div>
+        <button class="btn btn-sm btn-out" onclick="clearKpiDates()" style="margin-top:16px">Limpiar</button>
+      </div>
+      <div id="kpiPeriodoInfo" style="font-size:11px;color:var(--muted);margin-bottom:14px;display:none"></div>
+
+      <p style="font-size:12px;color:var(--muted);margin-bottom:18px">Ingresa los valores del período seleccionado. Los KPIs calculados automáticamente usan los datos de ventas y gastos registrados. Los manuales se guardan en el dispositivo.</p>
 
       <!-- FINANCIEROS -->
       <div class="kpi-section-title">💰 Financieros</div>
@@ -359,7 +367,13 @@ window.doLogout = () => signOut(auth);
 $('authPassword').addEventListener('keydown', e => { if(e.key==='Enter') handleAuth(); });
 
 onAuthStateChanged(auth, u => {
-  if(u){ $('authScreen').style.display='none'; $('app').style.display='flex'; $('userEmail').textContent=u.email; loadAll(); }
+  if(u){ 
+    $('authScreen').style.display='none'; 
+    $('app').style.display='flex'; 
+    $('userEmail').textContent=u.email; 
+    // Esperar 2 frames para que el browser calcule el layout del flex container
+    requestAnimationFrame(() => requestAnimationFrame(() => loadAll()));
+  }
   else{ $('authScreen').style.display='flex'; $('app').style.display='none'; }
 });
 
@@ -368,9 +382,26 @@ let ventas=[], gastos=[], inventario=[];
 let filtroV='todas', filtroG='todas';
 
 function loadAll(){
-  onSnapshot(query(collection(db,'ventas'),orderBy('fecha','desc')), s => { ventas=[]; s.forEach(d=>ventas.push({id:d.id,...d.data()})); renderVentas(); renderDash(); });
-  onSnapshot(query(collection(db,'gastos'),orderBy('fecha','desc')), s => { gastos=[]; s.forEach(d=>gastos.push({id:d.id,...d.data()})); renderGastos(); renderDash(); });
+  onSnapshot(query(collection(db,'ventas'),orderBy('fecha','desc')), s => { ventas=[]; s.forEach(d=>ventas.push({id:d.id,...d.data()})); renderVentas(); safeRenderDash(); });
+  onSnapshot(query(collection(db,'gastos'),orderBy('fecha','desc')), s => { gastos=[]; s.forEach(d=>gastos.push({id:d.id,...d.data()})); renderGastos(); safeRenderDash(); });
   onSnapshot(query(collection(db,'inventario'),orderBy('nombre')), s => { inventario=[]; s.forEach(d=>inventario.push({id:d.id,...d.data()})); renderInv(); });
+}
+
+// safeRenderDash: espera a que el canvas tenga dimensiones antes de renderizar
+function safeRenderDash() {
+  const isDashVisible = $('p-dashboard') && $('p-dashboard').classList.contains('on');
+  if(!isDashVisible) return;
+  const canvas = $('chartVG');
+  if(!canvas) return;
+  const w = canvas.offsetWidth;
+  if(w > 0) {
+    renderDash();
+  } else {
+    // El canvas aún no tiene dimensiones, reintentar
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if($('chartVG') && $('chartVG').offsetWidth > 0) renderDash();
+    }));
+  }
 }
 
 // ══════════ VENTAS ══════════
@@ -470,8 +501,8 @@ window.delI = async id => { if(confirm('¿Eliminar producto?')) await deleteDoc(
 
 // ══════════ DASHBOARD ══════════
 let chartVG, chartGastos, chartCanal, chartUtilidad;
-const chartOpts = { responsive:true, maintainAspectRatio:false, plugins:{ legend:{labels:{color:'#aaa',font:{size:11}}} }, scales:{x:{ticks:{color:'#888',font:{size:10}},grid:{color:'#222'}},y:{ticks:{color:'#888',font:{size:10},callback:v=>fmtS(v)},grid:{color:'#222'}}} };
-const pieOpts = { responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'bottom',labels:{color:'#aaa',font:{size:10},padding:12}} } };
+const chartOpts = { responsive:true, maintainAspectRatio:false, animation:{duration:400}, plugins:{ legend:{labels:{color:'#aaa',font:{size:11}}} }, scales:{x:{ticks:{color:'#888',font:{size:10}},grid:{color:'#222'}},y:{ticks:{color:'#888',font:{size:10},callback:v=>fmtS(v)},grid:{color:'#222'}}} };
+const pieOpts = { responsive:true, maintainAspectRatio:false, animation:{duration:400}, plugins:{ legend:{position:'bottom',labels:{color:'#aaa',font:{size:10},padding:12}} } };
 
 function renderDash(){
   // Date filter
@@ -588,7 +619,14 @@ window.clearDashDates = () => { $('dashDesde').value=''; $('dashHasta').value=''
 window.go = (p,el) => {
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('on')); el.classList.add('on');
   document.querySelectorAll('.page').forEach(pg=>pg.classList.remove('on')); $('p-'+p).classList.add('on');
-  if(p==='dashboard') setTimeout(()=>renderDash(), 50);
+  if(p==='dashboard') {
+    // Destruir charts previos para que Chart.js recalcule el tamaño
+    if(chartVG){chartVG.destroy();chartVG=null;}
+    if(chartGastos){chartGastos.destroy();chartGastos=null;}
+    if(chartCanal){chartCanal.destroy();chartCanal=null;}
+    if(chartUtilidad){chartUtilidad.destroy();chartUtilidad=null;}
+    requestAnimationFrame(() => requestAnimationFrame(() => renderDash()));
+  }
   if(p==='kpis') renderKPIs();
 };
 window.openMo = id => {
@@ -606,118 +644,171 @@ const KPI_DEFS = [
   // FINANCIEROS
   { id:'foodcost', grupo:'Financiero', nombre:'Food Cost %', formula:'Costo insumos / Ventas × 100',
     meta:30, unidad:'%', color:'red', freq:'Semanal',
-    inputs:[{id:'fc_costo',label:'Costo insumos ($)',ph:'850000'},{id:'fc_ventas',label:'Ventas totales ($)',ph:'3000000'}],
-    calc: v => v[0]>0&&v[1]>0 ? (v[0]/v[1]*100) : null,
+    autoCalc: (v, g) => {
+      const costoMP = g.filter(x=>x.categoria==='materia_prima').reduce((s,x)=>s+Number(x.monto||0),0);
+      const totalV = v.reduce((s,x)=>s+Number(x.monto||0),0);
+      return costoMP>0&&totalV>0 ? (costoMP/totalV*100) : null;
+    },
+    inputs:[{id:'fc_costo',label:'Costo insumos ($)',ph:'850000'},{id:'fc_ventas',label:'Ventas ($)',ph:'3000000'}],
+    calc: vals => vals[0]>0&&vals[1]>0 ? (vals[0]/vals[1]*100) : null,
     status: val => val<=28?'ok':val<=32?'warn':'bad',
     metaLabel:'Meta: 28%–32%' },
   { id:'margen', grupo:'Financiero', nombre:'Margen Neto %', formula:'(Ventas - Gastos) / Ventas × 100',
     meta:20, unidad:'%', color:'green', freq:'Mensual',
+    autoCalc: (v, g) => {
+      const tV = v.reduce((s,x)=>s+Number(x.monto||0),0);
+      const tG = g.reduce((s,x)=>s+Number(x.monto||0),0);
+      return tV>0 ? ((tV-tG)/tV*100) : null;
+    },
     inputs:[{id:'mn_ventas',label:'Ventas ($)',ph:'3000000'},{id:'mn_gastos',label:'Gastos totales ($)',ph:'2400000'}],
-    calc: v => v[0]>0 ? ((v[0]-v[1])/v[0]*100) : null,
+    calc: vals => vals[0]>0 ? ((vals[0]-vals[1])/vals[0]*100) : null,
     status: val => val>=20?'ok':val>=10?'warn':'bad',
     metaLabel:'Meta: ≥ 20%' },
   { id:'ticket', grupo:'Financiero', nombre:'Ticket Promedio', formula:'Ventas totales / N° transacciones',
     meta:25000, unidad:'$', color:'orange', freq:'Diario',
+    autoCalc: (v) => {
+      const tV = v.reduce((s,x)=>s+Number(x.monto||0),0);
+      return v.length>0&&tV>0 ? (tV/v.length) : null;
+    },
     inputs:[{id:'tp_ventas',label:'Ventas del período ($)',ph:'3000000'},{id:'tp_trans',label:'N° transacciones',ph:'120'}],
-    calc: v => v[1]>0 ? (v[0]/v[1]) : null,
+    calc: vals => vals[1]>0 ? (vals[0]/vals[1]) : null,
     status: val => val>=25000?'ok':val>=18000?'warn':'bad',
     metaLabel:'Meta: crecimiento 10% trimestral' },
   { id:'costoNom', grupo:'Financiero', nombre:'Costo Nómina %', formula:'Nómina / Ventas × 100',
     meta:25, unidad:'%', color:'purple', freq:'Mensual',
+    autoCalc: (v, g) => {
+      const nom = g.filter(x=>x.categoria==='nomina').reduce((s,x)=>s+Number(x.monto||0),0);
+      const tV = v.reduce((s,x)=>s+Number(x.monto||0),0);
+      return nom>0&&tV>0 ? (nom/tV*100) : null;
+    },
     inputs:[{id:'cn_nom',label:'Costo nómina ($)',ph:'600000'},{id:'cn_ventas',label:'Ventas ($)',ph:'3000000'}],
-    calc: v => v[0]>0&&v[1]>0 ? (v[0]/v[1]*100) : null,
+    calc: vals => vals[0]>0&&vals[1]>0 ? (vals[0]/vals[1]*100) : null,
     status: val => val<=25?'ok':val<=30?'warn':'bad',
     metaLabel:'Meta: ≤ 25%' },
 
   // OPERACIONES
   { id:'tservicio', grupo:'Operaciones', nombre:'Tiempo de Servicio', formula:'Tiempo pedido → entrega',
     meta:8, unidad:'min', color:'green', freq:'Diario',
+    autoCalc: null,
     inputs:[{id:'ts_min',label:'Tiempo promedio (min)',ph:'7'}],
-    calc: v => v[0]>0 ? v[0] : null,
+    calc: vals => vals[0]>0 ? vals[0] : null,
     status: val => val<=8?'ok':val<=12?'warn':'bad',
     metaLabel:'Meta: ≤ 8 minutos' },
   { id:'stockrot', grupo:'Operaciones', nombre:'Rotación Inventario', formula:'Costo ventas / Inventario promedio',
     meta:4, unidad:'veces', color:'blue', freq:'Mensual',
+    autoCalc: null,
     inputs:[{id:'ri_costoVentas',label:'Costo ventas ($)',ph:'900000'},{id:'ri_invProm',label:'Inventario promedio ($)',ph:'200000'}],
-    calc: v => v[1]>0 ? (v[0]/v[1]) : null,
+    calc: vals => vals[1]>0 ? (vals[0]/vals[1]) : null,
     status: val => val>=4?'ok':val>=2?'warn':'bad',
     metaLabel:'Meta: ≥ 4 veces/mes' },
   { id:'merma', grupo:'Operaciones', nombre:'% Merma', formula:'Merma / Compras × 100',
     meta:3, unidad:'%', color:'yellow', freq:'Semanal',
+    autoCalc: null,
     inputs:[{id:'me_merma',label:'Valor merma ($)',ph:'30000'},{id:'me_compras',label:'Total compras ($)',ph:'900000'}],
-    calc: v => v[1]>0 ? (v[0]/v[1]*100) : null,
+    calc: vals => vals[1]>0 ? (vals[0]/vals[1]*100) : null,
     status: val => val<=3?'ok':val<=6?'warn':'bad',
     metaLabel:'Meta: ≤ 3%' },
 
   // CLIENTE
   { id:'google', grupo:'Cliente', nombre:'Calificación Google', formula:'Promedio reseñas Google',
     meta:4.5, unidad:'★', color:'yellow', freq:'Mensual',
+    autoCalc: null,
     inputs:[{id:'cg_rating',label:'Calificación actual (0-5)',ph:'4.6'}],
-    calc: v => v[0]>0 ? v[0] : null,
+    calc: vals => vals[0]>0 ? vals[0] : null,
     status: val => val>=4.5?'ok':val>=4.0?'warn':'bad',
     metaLabel:'Meta: ≥ 4.5 estrellas' },
   { id:'retencion', grupo:'Cliente', nombre:'% Clientes Recurrentes', formula:'Clientes recurrentes / Total clientes × 100',
     meta:40, unidad:'%', color:'green', freq:'Mensual',
+    autoCalc: null,
     inputs:[{id:'cr_recur',label:'Clientes recurrentes',ph:'48'},{id:'cr_total',label:'Total clientes',ph:'120'}],
-    calc: v => v[1]>0 ? (v[0]/v[1]*100) : null,
+    calc: vals => vals[1]>0 ? (vals[0]/vals[1]*100) : null,
     status: val => val>=40?'ok':val>=25?'warn':'bad',
     metaLabel:'Meta: ≥ 40%' },
 
   // VENTAS
   { id:'upselling', grupo:'Ventas', nombre:'Conversión Upselling', formula:'# upselling aceptados / # pedidos × 100',
     meta:30, unidad:'%', color:'orange', freq:'Semanal',
+    autoCalc: null,
     inputs:[{id:'up_acep',label:'Upselling aceptados',ph:'38'},{id:'up_pedidos',label:'Total pedidos',ph:'120'}],
-    calc: v => v[1]>0 ? (v[0]/v[1]*100) : null,
+    calc: vals => vals[1]>0 ? (vals[0]/vals[1]*100) : null,
     status: val => val>=30?'ok':val>=15?'warn':'bad',
     metaLabel:'Meta: ≥ 30%' },
   { id:'ventasTurno', grupo:'Ventas', nombre:'Ventas por Turno', formula:'Ingresos / turno operativo',
     meta:500000, unidad:'$', color:'red', freq:'Diario',
+    autoCalc: null,
     inputs:[{id:'vt_ingresos',label:'Ingresos del turno ($)',ph:'520000'}],
-    calc: v => v[0]>0 ? v[0] : null,
+    calc: vals => vals[0]>0 ? vals[0] : null,
     status: val => val>=500000?'ok':val>=350000?'warn':'bad',
     metaLabel:'Meta: crecimiento 5% mensual' },
   { id:'domVsSitio', grupo:'Ventas', nombre:'% Ventas Domicilio', formula:'Ventas domicilio / Ventas totales × 100',
     meta:35, unidad:'%', color:'blue', freq:'Semanal',
+    autoCalc: (v) => {
+      const tDom = v.filter(x=>x.canal==='domicilio').reduce((s,x)=>s+Number(x.monto||0),0);
+      const tV = v.reduce((s,x)=>s+Number(x.monto||0),0);
+      return tV>0 ? (tDom/tV*100) : null;
+    },
     inputs:[{id:'dv_domi',label:'Ventas domicilio ($)',ph:'900000'},{id:'dv_total',label:'Ventas totales ($)',ph:'3000000'}],
-    calc: v => v[1]>0 ? (v[0]/v[1]*100) : null,
+    calc: vals => vals[1]>0 ? (vals[0]/vals[1]*100) : null,
     status: val => val>=30&&val<=50?'ok':val>=20?'warn':'bad',
     metaLabel:'Meta: 30%–50%' },
 ];
 
 let kpiVals = {};
 try { kpiVals = JSON.parse(localStorage.getItem('laindustria_kpis')||'{}'); } catch(e) { kpiVals={}; }
-
 function saveKpiVals() { try { localStorage.setItem('laindustria_kpis', JSON.stringify(kpiVals)); } catch(e){} }
 
-function calcKpiValue(k) {
-  const vals = k.inputs.map(inp => parseFloat(kpiVals[inp.id]||'0')||0);
-  return k.calc(vals);
+// Obtener ventas/gastos filtrados por fechas KPI
+function getKpiFiltrados() {
+  const desde = $('kpiDesde')?.value, hasta = $('kpiHasta')?.value;
+  const dD = desde ? new Date(desde+'T00:00:00') : null;
+  const dH = hasta ? new Date(hasta+'T23:59:59') : null;
+  const filtrar = arr => arr.filter(r => {
+    const d = r.fecha?.toDate?.(); if(!d) return false;
+    if(dD && d < dD) return false;
+    if(dH && d > dH) return false;
+    return true;
+  });
+  const fV = (dD||dH) ? filtrar(ventas) : ventas;
+  const fG = (dD||dH) ? filtrar(gastos) : gastos;
+  return { fV, fG, desde, hasta };
 }
 
-function renderKPICard(k) {
-  const val = calcKpiValue(k);
+function calcKpiValue(k, fV, fG) {
+  // Intentar cálculo automático con datos reales si existe autoCalc
+  if(k.autoCalc) {
+    const autoVal = k.autoCalc(fV, fG);
+    if(autoVal !== null) return { val: autoVal, esAuto: true };
+  }
+  // Fallback a valores manuales
+  const vals = k.inputs.map(inp => parseFloat(kpiVals[inp.id]||'0')||0);
+  const v = k.calc(vals);
+  return { val: v, esAuto: false };
+}
+
+function renderKPICard(k, fV, fG) {
+  const { val, esAuto } = calcKpiValue(k, fV, fG);
   const st = val!==null ? k.status(val) : 'warn';
   const stLabel = st==='ok'?'✅ En meta':st==='warn'?'⚠️ Revisar':'❌ Fuera de meta';
-  const disp = val!==null ? (k.unidad==='$' ? fmt(val) : k.unidad==='★' ? val.toFixed(1)+' ★' : val.toFixed(1)+' '+k.unidad) : '—';
+  const disp = val!==null 
+    ? (k.unidad==='$' ? fmt(val) : k.unidad==='★' ? val.toFixed(1)+' ★' : val.toFixed(1)+' '+k.unidad) 
+    : '—';
+  const pct = val!==null ? Math.min(100, Math.abs(val/k.meta)*100) : 0;
+  const fuenteTag = esAuto 
+    ? '<span style="font-size:9px;background:rgba(52,152,219,.15);color:#3498db;padding:2px 6px;border-radius:8px;margin-left:4px">🔗 Auto</span>'
+    : (k.autoCalc ? '<span style="font-size:9px;background:rgba(241,196,15,.1);color:#f1c40f;padding:2px 6px;border-radius:8px;margin-left:4px">✏️ Manual</span>' : '');
 
-  let pct = 0;
-  if(val!==null) {
-    if(k.unidad==='%'||k.unidad==='min'||k.unidad==='veces') {
-      pct = Math.min(100, (val/k.meta)*100);
-    } else {
-      pct = Math.min(100, (val/k.meta)*100);
-    }
-  }
-
-  const inputsHtml = k.inputs.map(inp => `
+  const inputsHtml = esAuto 
+    ? `<div style="font-size:11px;color:var(--muted);font-style:italic">Calculado automáticamente con los datos del período</div>`
+    : k.inputs.map(inp => `
     <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:100px">
       <label style="font-size:10px;color:var(--muted)">${inp.label}</label>
-      <input type="number" id="kpi_inp_${inp.id}" placeholder="${inp.ph}" value="${kpiVals[inp.id]||''}" 
-        oninput="kpiVals['${inp.id}']=this.value;saveKpiVals();renderKPIs()" style="padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:inherit;outline:none;width:100%">
+      <input type="number" placeholder="${inp.ph}" value="${kpiVals[inp.id]||''}" 
+        oninput="kpiVals['${inp.id}']=this.value;saveKpiVals();renderKPIs()" 
+        style="padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:inherit;outline:none;width:100%">
     </div>`).join('');
 
   return `<div class="kpi-card ${k.color}">
-    <div class="kpi-name">${k.nombre}</div>
+    <div class="kpi-name">${k.nombre}${fuenteTag}</div>
     <div class="kpi-val ${k.color}">${disp}</div>
     <div class="kpi-formula">${k.formula}</div>
     <div class="kpi-bar-wrap"><div class="kpi-bar ${st}" style="width:${pct}%"></div></div>
@@ -728,15 +819,30 @@ function renderKPICard(k) {
 }
 
 function renderKPIs() {
+  const { fV, fG, desde, hasta } = getKpiFiltrados();
+  
+  // Mostrar info del período
+  const infoEl = $('kpiPeriodoInfo');
+  if(infoEl) {
+    if(desde||hasta) {
+      infoEl.style.display='block';
+      infoEl.textContent = `📅 Período: ${desde||'inicio'} → ${hasta||'hoy'} · Ventas: ${fV.length} registros · Gastos: ${fG.length} registros`;
+    } else {
+      infoEl.style.display='none';
+    }
+  }
+
   const grupos = {Financiero:'kpiGridFinanciero', Operaciones:'kpiGridOperaciones', Cliente:'kpiGridCliente', Ventas:'kpiGridVentas'};
   Object.keys(grupos).forEach(g => {
     const el = $(grupos[g]);
     if(!el) return;
-    const cards = KPI_DEFS.filter(k=>k.grupo===g).map(k=>renderKPICard(k)).join('');
+    const cards = KPI_DEFS.filter(k=>k.grupo===g).map(k=>renderKPICard(k, fV, fG)).join('');
     el.innerHTML = cards;
   });
 }
 
+window.onKpiDateChange = () => renderKPIs();
+window.clearKpiDates = () => { $('kpiDesde').value=''; $('kpiHasta').value=''; renderKPIs(); };
 </script>
 </body>
 </html>
