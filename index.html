@@ -99,9 +99,11 @@
     /* CHARTS */
     .chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-bottom:20px}
     .chart-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px}
-    .chart-box h3{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;margin-bottom:12px;color:var(--soft)}
-    .chart-box{overflow:hidden}
-    .chart-box canvas{display:block;width:100%!important;height:250px!important;box-sizing:border-box}
+    .chart-box h3{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;margin-bottom:0;color:var(--soft);position:relative;z-index:1;padding-bottom:8px}
+    .chart-box{position:relative;height:280px;padding-bottom:0}
+    .chart-box .chart-inner{position:absolute;top:40px;left:16px;right:16px;bottom:16px}
+    .chart-inner{position:absolute;top:44px;left:16px;right:16px;bottom:16px}
+    .chart-inner canvas{width:100%!important;height:100%!important}
 
     /* MODAL */
     .mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:flex-end;justify-content:center}
@@ -187,10 +189,10 @@
       </div>
       <div class="stats" id="dashStats"></div>
       <div class="chart-grid">
-        <div class="chart-box"><h3>Ventas vs Gastos (Últimos 6 meses)</h3><canvas id="chartVG" width="400" height="250"></canvas></div>
-        <div class="chart-box"><h3>Distribución de Gastos</h3><canvas id="chartGastos" width="400" height="250"></canvas></div>
-        <div class="chart-box"><h3>Ventas: Sitio vs Domicilio</h3><canvas id="chartCanal" width="400" height="250"></canvas></div>
-        <div class="chart-box"><h3>Utilidad Mensual</h3><canvas id="chartUtilidad" width="400" height="250"></canvas></div>
+        <div class="chart-box"><h3>Ventas vs Gastos (Últimos 6 meses)</h3><div class="chart-inner"><canvas id="chartVG"></canvas></div></div>
+        <div class="chart-box"><h3>Distribución de Gastos</h3><div class="chart-inner"><canvas id="chartGastos"></canvas></div></div>
+        <div class="chart-box"><h3>Ventas: Sitio vs Domicilio</h3><div class="chart-inner"><canvas id="chartCanal"></canvas></div></div>
+        <div class="chart-box"><h3>Utilidad Mensual</h3><div class="chart-inner"><canvas id="chartUtilidad"></canvas></div></div>
       </div>
     </div>
 
@@ -484,8 +486,8 @@ window.delI = async id => { if(confirm('¿Eliminar producto?')) await deleteDoc(
 
 // ══════════ DASHBOARD ══════════
 let chartVG, chartGastos, chartCanal, chartUtilidad;
-const chartOpts = { responsive:false, maintainAspectRatio:false, animation:{duration:400}, plugins:{ legend:{labels:{color:'#aaa',font:{size:11}}} }, scales:{x:{ticks:{color:'#888',font:{size:10}},grid:{color:'#222'}},y:{ticks:{color:'#888',font:{size:10},callback:v=>fmtS(v)},grid:{color:'#222'}}} };
-const pieOpts = { responsive:false, maintainAspectRatio:false, animation:{duration:400}, plugins:{ legend:{position:'bottom',labels:{color:'#aaa',font:{size:10},padding:12}} } };
+const chartOpts = { responsive:true, maintainAspectRatio:false, animation:{duration:400}, plugins:{ legend:{labels:{color:'#aaa',font:{size:11}}} }, scales:{x:{ticks:{color:'#888',font:{size:10}},grid:{color:'#222'}},y:{ticks:{color:'#888',font:{size:10},callback:v=>fmtS(v)},grid:{color:'#222'}}} };
+const pieOpts = { responsive:true, maintainAspectRatio:false, animation:{duration:400}, plugins:{ legend:{position:'bottom',labels:{color:'#aaa',font:{size:10},padding:12}} } };
 
 function renderDash(){
   // Date filter
@@ -525,11 +527,6 @@ function renderDash(){
   const mGastos = months.map(({m,y})=>fGastos.filter(g=>{const d=g.fecha?.toDate?.();return d&&d.getMonth()===m&&d.getFullYear()===y}).reduce((s,g)=>s+Number(g.monto||0),0));
   const mUtil = mVentas.map((v,i)=>v-mGastos[i]);
   const labels = months.map(m=>m.label);
-
-  // Ajustar ancho de cada canvas al ancho real de su contenedor padre
-  ['chartVG','chartGastos','chartCanal','chartUtilidad'].forEach(id => {
-    const c = $(id); if(c && c.parentElement) { c.width = c.parentElement.clientWidth || 400; }
-  });
 
   // Chart: Ventas vs Gastos
   if(chartVG) chartVG.destroy();
