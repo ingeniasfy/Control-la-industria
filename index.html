@@ -100,7 +100,8 @@
     .chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-bottom:20px}
     .chart-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px}
     .chart-box h3{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;margin-bottom:12px;color:var(--soft)}
-    .chart-box canvas{width:100%!important;height:250px!important}
+    .chart-box{overflow:hidden}
+    .chart-box canvas{display:block;width:100%!important;height:250px!important;box-sizing:border-box}
 
     /* MODAL */
     .mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:flex-end;justify-content:center}
@@ -186,10 +187,10 @@
       </div>
       <div class="stats" id="dashStats"></div>
       <div class="chart-grid">
-        <div class="chart-box"><h3>Ventas vs Gastos (Últimos 6 meses)</h3><canvas id="chartVG"></canvas></div>
-        <div class="chart-box"><h3>Distribución de Gastos</h3><canvas id="chartGastos"></canvas></div>
-        <div class="chart-box"><h3>Ventas: Sitio vs Domicilio</h3><canvas id="chartCanal"></canvas></div>
-        <div class="chart-box"><h3>Utilidad Mensual</h3><canvas id="chartUtilidad"></canvas></div>
+        <div class="chart-box"><h3>Ventas vs Gastos (Últimos 6 meses)</h3><canvas id="chartVG" width="400" height="250"></canvas></div>
+        <div class="chart-box"><h3>Distribución de Gastos</h3><canvas id="chartGastos" width="400" height="250"></canvas></div>
+        <div class="chart-box"><h3>Ventas: Sitio vs Domicilio</h3><canvas id="chartCanal" width="400" height="250"></canvas></div>
+        <div class="chart-box"><h3>Utilidad Mensual</h3><canvas id="chartUtilidad" width="400" height="250"></canvas></div>
       </div>
     </div>
 
@@ -370,9 +371,8 @@ onAuthStateChanged(auth, u => {
   if(u){ 
     $('authScreen').style.display='none'; 
     $('app').style.display='flex'; 
-    $('userEmail').textContent=u.email; 
-    // Esperar 2 frames para que el browser calcule el layout del flex container
-    requestAnimationFrame(() => requestAnimationFrame(() => loadAll()));
+    $('userEmail').textContent=u.email;
+    loadAll();
   }
   else{ $('authScreen').style.display='flex'; $('app').style.display='none'; }
 });
@@ -382,26 +382,9 @@ let ventas=[], gastos=[], inventario=[];
 let filtroV='todas', filtroG='todas';
 
 function loadAll(){
-  onSnapshot(query(collection(db,'ventas'),orderBy('fecha','desc')), s => { ventas=[]; s.forEach(d=>ventas.push({id:d.id,...d.data()})); renderVentas(); safeRenderDash(); });
-  onSnapshot(query(collection(db,'gastos'),orderBy('fecha','desc')), s => { gastos=[]; s.forEach(d=>gastos.push({id:d.id,...d.data()})); renderGastos(); safeRenderDash(); });
+  onSnapshot(query(collection(db,'ventas'),orderBy('fecha','desc')), s => { ventas=[]; s.forEach(d=>ventas.push({id:d.id,...d.data()})); renderVentas(); renderDash(); });
+  onSnapshot(query(collection(db,'gastos'),orderBy('fecha','desc')), s => { gastos=[]; s.forEach(d=>gastos.push({id:d.id,...d.data()})); renderGastos(); renderDash(); });
   onSnapshot(query(collection(db,'inventario'),orderBy('nombre')), s => { inventario=[]; s.forEach(d=>inventario.push({id:d.id,...d.data()})); renderInv(); });
-}
-
-// safeRenderDash: espera a que el canvas tenga dimensiones antes de renderizar
-function safeRenderDash() {
-  const isDashVisible = $('p-dashboard') && $('p-dashboard').classList.contains('on');
-  if(!isDashVisible) return;
-  const canvas = $('chartVG');
-  if(!canvas) return;
-  const w = canvas.offsetWidth;
-  if(w > 0) {
-    renderDash();
-  } else {
-    // El canvas aún no tiene dimensiones, reintentar
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      if($('chartVG') && $('chartVG').offsetWidth > 0) renderDash();
-    }));
-  }
 }
 
 // ══════════ VENTAS ══════════
@@ -501,8 +484,8 @@ window.delI = async id => { if(confirm('¿Eliminar producto?')) await deleteDoc(
 
 // ══════════ DASHBOARD ══════════
 let chartVG, chartGastos, chartCanal, chartUtilidad;
-const chartOpts = { responsive:true, maintainAspectRatio:false, animation:{duration:400}, plugins:{ legend:{labels:{color:'#aaa',font:{size:11}}} }, scales:{x:{ticks:{color:'#888',font:{size:10}},grid:{color:'#222'}},y:{ticks:{color:'#888',font:{size:10},callback:v=>fmtS(v)},grid:{color:'#222'}}} };
-const pieOpts = { responsive:true, maintainAspectRatio:false, animation:{duration:400}, plugins:{ legend:{position:'bottom',labels:{color:'#aaa',font:{size:10},padding:12}} } };
+const chartOpts = { responsive:false, maintainAspectRatio:false, animation:{duration:400}, plugins:{ legend:{labels:{color:'#aaa',font:{size:11}}} }, scales:{x:{ticks:{color:'#888',font:{size:10}},grid:{color:'#222'}},y:{ticks:{color:'#888',font:{size:10},callback:v=>fmtS(v)},grid:{color:'#222'}}} };
+const pieOpts = { responsive:false, maintainAspectRatio:false, animation:{duration:400}, plugins:{ legend:{position:'bottom',labels:{color:'#aaa',font:{size:10},padding:12}} } };
 
 function renderDash(){
   // Date filter
@@ -543,6 +526,11 @@ function renderDash(){
   const mUtil = mVentas.map((v,i)=>v-mGastos[i]);
   const labels = months.map(m=>m.label);
 
+  // Ajustar ancho de cada canvas al ancho real de su contenedor padre
+  ['chartVG','chartGastos','chartCanal','chartUtilidad'].forEach(id => {
+    const c = $(id); if(c && c.parentElement) { c.width = c.parentElement.clientWidth || 400; }
+  });
+
   // Chart: Ventas vs Gastos
   if(chartVG) chartVG.destroy();
   chartVG = new Chart($('chartVG'), { type:'bar', data:{ labels, datasets:[
@@ -553,7 +541,13 @@ function renderDash(){
   // Chart: Gastos por categoría
   const catTotals = Object.entries(CATS).map(([k,v])=>({label:v.l,color:v.c,total:fGastos.filter(g=>g.categoria===k).reduce((s,g)=>s+Number(g.monto||0),0)})).filter(c=>c.total>0);
   if(chartGastos) chartGastos.destroy();
-  chartGastos = new Chart($('chartGastos'), { type:'doughnut', data:{ labels:catTotals.map(c=>c.label), datasets:[{data:catTotals.map(c=>c.total),backgroundColor:catTotals.map(c=>c.color),borderWidth:0}] }, options:pieOpts });
+  if(catTotals.length > 0) {
+    chartGastos = new Chart($('chartGastos'), { type:'doughnut', data:{ labels:catTotals.map(c=>c.label), datasets:[{data:catTotals.map(c=>c.total),backgroundColor:catTotals.map(c=>c.color),borderWidth:0}] }, options:pieOpts });
+  } else {
+    const ctx = $('chartGastos').getContext('2d');
+    ctx.fillStyle='#888'; ctx.font='14px DM Sans'; ctx.textAlign='center';
+    ctx.fillText('Sin gastos registrados', 200, 125);
+  }
 
   // Chart: Canal
   const mSitio = months.map(({m,y})=>fVentas.filter(v=>{const d=v.fecha?.toDate?.();return d&&d.getMonth()===m&&d.getFullYear()===y&&v.canal!=='domicilio'}).reduce((s,v)=>s+Number(v.monto||0),0));
@@ -620,12 +614,11 @@ window.go = (p,el) => {
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('on')); el.classList.add('on');
   document.querySelectorAll('.page').forEach(pg=>pg.classList.remove('on')); $('p-'+p).classList.add('on');
   if(p==='dashboard') {
-    // Destruir charts previos para que Chart.js recalcule el tamaño
     if(chartVG){chartVG.destroy();chartVG=null;}
     if(chartGastos){chartGastos.destroy();chartGastos=null;}
     if(chartCanal){chartCanal.destroy();chartCanal=null;}
     if(chartUtilidad){chartUtilidad.destroy();chartUtilidad=null;}
-    requestAnimationFrame(() => requestAnimationFrame(() => renderDash()));
+    renderDash();
   }
   if(p==='kpis') renderKPIs();
 };
