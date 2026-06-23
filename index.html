@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -98,9 +97,9 @@
 
     /* CHARTS */
     .chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:20px}
-    .chart-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px 16px}
-    .chart-box h3{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;margin-bottom:10px;color:var(--soft);letter-spacing:.3px}
-    .chart-box canvas{display:block;height:220px!important}
+    .chart-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px 16px;display:flex;flex-direction:column}
+    .chart-box h3{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;margin-bottom:10px;color:var(--soft);letter-spacing:.3px;flex-shrink:0}
+    .chart-box canvas{width:100%!important;height:220px!important;flex-shrink:0}
 
     /* MODAL */
     .mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:flex-end;justify-content:center}
@@ -179,10 +178,11 @@
       <div class="sec-head"><h2>📊 Dashboard</h2>
         <div class="head-btns"><button class="btn btn-sm btn-out" onclick="exportDashboard()">⬇ Reporte General</button></div>
       </div>
-      <div class="filters" style="align-items:center">
-        <div class="fg" style="margin:0;flex:1;min-width:130px"><label style="margin-bottom:3px">Desde</label><input type="date" id="dashDesde" onchange="renderDash()" style="padding:8px 10px;font-size:12px"></div>
-        <div class="fg" style="margin:0;flex:1;min-width:130px"><label style="margin-bottom:3px">Hasta</label><input type="date" id="dashHasta" onchange="renderDash()" style="padding:8px 10px;font-size:12px"></div>
-        <button class="btn btn-sm btn-out" onclick="clearDashDates()" style="margin-top:16px">Limpiar</button>
+      <div class="filters" style="align-items:flex-end;gap:8px">
+        <div class="fg" style="margin:0;flex:1;min-width:120px"><label style="margin-bottom:3px">Desde</label><input type="date" id="dashDesde" style="padding:8px 10px;font-size:12px"></div>
+        <div class="fg" style="margin:0;flex:1;min-width:120px"><label style="margin-bottom:3px">Hasta</label><input type="date" id="dashHasta" style="padding:8px 10px;font-size:12px"></div>
+        <button class="btn btn-sm btn-fill" onclick="aplicarFiltrosDash()" style="margin-bottom:1px">Aplicar</button>
+        <button class="btn btn-sm btn-out" onclick="clearDashDates()" style="margin-bottom:1px">Limpiar</button>
       </div>
       <div class="stats" id="dashStats"></div>
       <div class="chart-grid">
@@ -371,7 +371,7 @@ onAuthStateChanged(auth, u => {
     $('authScreen').style.display='none'; 
     $('app').style.display='flex'; 
     $('userEmail').textContent=u.email;
-    loadAll();
+    setTimeout(() => loadAll(), 100);
   }
   else{ $('authScreen').style.display='flex'; $('app').style.display='none'; }
 });
@@ -380,10 +380,35 @@ onAuthStateChanged(auth, u => {
 let ventas=[], gastos=[], inventario=[];
 let filtroV='todas', filtroG='todas';
 
+let _dashTimer = null;
+function debouncedRenderDash() {
+  clearTimeout(_dashTimer);
+  _dashTimer = setTimeout(() => {
+    if(chartVG){chartVG.destroy();chartVG=null;}
+    if(chartGastos){chartGastos.destroy();chartGastos=null;}
+    if(chartCanal){chartCanal.destroy();chartCanal=null;}
+    if(chartUtilidad){chartUtilidad.destroy();chartUtilidad=null;}
+    renderDash();
+  }, 80);
+}
+
 function loadAll(){
-  onSnapshot(query(collection(db,'ventas'),orderBy('fecha','desc')), s => { ventas=[]; s.forEach(d=>ventas.push({id:d.id,...d.data()})); renderVentas(); renderDash(); });
-  onSnapshot(query(collection(db,'gastos'),orderBy('fecha','desc')), s => { gastos=[]; s.forEach(d=>gastos.push({id:d.id,...d.data()})); renderGastos(); renderDash(); });
-  onSnapshot(query(collection(db,'inventario'),orderBy('nombre')), s => { inventario=[]; s.forEach(d=>inventario.push({id:d.id,...d.data()})); renderInv(); });
+  onSnapshot(query(collection(db,'ventas'),orderBy('fecha','desc')), s => { 
+    ventas=[]; s.forEach(d=>ventas.push({id:d.id,...d.data()})); 
+    renderVentas(); 
+    debouncedRenderDash();
+    if($('p-kpis')?.classList.contains('on')) renderKPIs();
+  });
+  onSnapshot(query(collection(db,'gastos'),orderBy('fecha','desc')), s => { 
+    gastos=[]; s.forEach(d=>gastos.push({id:d.id,...d.data()})); 
+    renderGastos(); 
+    debouncedRenderDash();
+    if($('p-kpis')?.classList.contains('on')) renderKPIs();
+  });
+  onSnapshot(query(collection(db,'inventario'),orderBy('nombre')), s => { 
+    inventario=[]; s.forEach(d=>inventario.push({id:d.id,...d.data()})); 
+    renderInv(); 
+  });
 }
 
 // ══════════ VENTAS ══════════
@@ -601,7 +626,21 @@ window.exportDashboard = () => {
   ];
   dlCSV(`reporte_${new Date().toISOString().slice(0,10)}.csv`,['Concepto','Valor'],rows);
 };
-window.clearDashDates = () => { $('dashDesde').value=''; $('dashHasta').value=''; renderDash(); };
+window.aplicarFiltrosDash = () => {
+  if(chartVG){chartVG.destroy();chartVG=null;}
+  if(chartGastos){chartGastos.destroy();chartGastos=null;}
+  if(chartCanal){chartCanal.destroy();chartCanal=null;}
+  if(chartUtilidad){chartUtilidad.destroy();chartUtilidad=null;}
+  setTimeout(()=>renderDash(), 50);
+};
+window.clearDashDates = () => { 
+  $('dashDesde').value=''; $('dashHasta').value=''; 
+  if(chartVG){chartVG.destroy();chartVG=null;}
+  if(chartGastos){chartGastos.destroy();chartGastos=null;}
+  if(chartCanal){chartCanal.destroy();chartCanal=null;}
+  if(chartUtilidad){chartUtilidad.destroy();chartUtilidad=null;}
+  setTimeout(()=>renderDash(), 50);
+};
 
 // ══════════ UI ══════════
 window.go = (p,el) => {
@@ -612,7 +651,7 @@ window.go = (p,el) => {
     if(chartGastos){chartGastos.destroy();chartGastos=null;}
     if(chartCanal){chartCanal.destroy();chartCanal=null;}
     if(chartUtilidad){chartUtilidad.destroy();chartUtilidad=null;}
-    renderDash();
+    setTimeout(() => renderDash(), 50);
   }
   if(p==='kpis') renderKPIs();
 };
@@ -632,7 +671,7 @@ const KPI_DEFS = [
   { id:'foodcost', grupo:'Financiero', nombre:'Food Cost %', formula:'Costo insumos / Ventas × 100',
     meta:30, unidad:'%', color:'red', freq:'Semanal',
     autoCalc: (v, g) => {
-      const costoMP = g.filter(x=>x.categoria==='materia_prima').reduce((s,x)=>s+Number(x.monto||0),0);
+      const costoMP = g.filter(x=>['materia_prima','insumos','ingredientes'].includes(x.categoria)).reduce((s,x)=>s+Number(x.monto||0),0);
       const totalV = v.reduce((s,x)=>s+Number(x.monto||0),0);
       return costoMP>0&&totalV>0 ? (costoMP/totalV*100) : null;
     },
@@ -655,7 +694,8 @@ const KPI_DEFS = [
     meta:25000, unidad:'$', color:'orange', freq:'Diario',
     autoCalc: (v) => {
       const tV = v.reduce((s,x)=>s+Number(x.monto||0),0);
-      return v.length>0&&tV>0 ? (tV/v.length) : null;
+      const n = v.length;
+      return n>0&&tV>0 ? (tV/n) : null;
     },
     inputs:[{id:'tp_ventas',label:'Ventas del período ($)',ph:'3000000'},{id:'tp_trans',label:'N° transacciones',ph:'120'}],
     calc: vals => vals[1]>0 ? (vals[0]/vals[1]) : null,
@@ -664,7 +704,7 @@ const KPI_DEFS = [
   { id:'costoNom', grupo:'Financiero', nombre:'Costo Nómina %', formula:'Nómina / Ventas × 100',
     meta:25, unidad:'%', color:'purple', freq:'Mensual',
     autoCalc: (v, g) => {
-      const nom = g.filter(x=>x.categoria==='nomina').reduce((s,x)=>s+Number(x.monto||0),0);
+      const nom = g.filter(x=>['nomina','nómina','salarios','empleados'].includes(x.categoria)).reduce((s,x)=>s+Number(x.monto||0),0);
       const tV = v.reduce((s,x)=>s+Number(x.monto||0),0);
       return nom>0&&tV>0 ? (nom/tV*100) : null;
     },
@@ -674,17 +714,21 @@ const KPI_DEFS = [
     metaLabel:'Meta: ≤ 25%' },
 
   // OPERACIONES
-  { id:'tservicio', grupo:'Operaciones', nombre:'Tiempo de Servicio', formula:'Tiempo pedido → entrega',
+  { id:'tservicio', grupo:'Operaciones', nombre:'Tiempo de Servicio', formula:'Tiempo pedido → entrega (medido manualmente)',
     meta:8, unidad:'min', color:'green', freq:'Diario',
     autoCalc: null,
-    inputs:[{id:'ts_min',label:'Tiempo promedio (min)',ph:'7'}],
+    inputs:[{id:'ts_min',label:'Tiempo promedio hoy (min)',ph:'7'}],
     calc: vals => vals[0]>0 ? vals[0] : null,
     status: val => val<=8?'ok':val<=12?'warn':'bad',
     metaLabel:'Meta: ≤ 8 minutos' },
-  { id:'stockrot', grupo:'Operaciones', nombre:'Rotación Inventario', formula:'Costo ventas / Inventario promedio',
+  { id:'stockrot', grupo:'Operaciones', nombre:'Rotación Inventario', formula:'Costo ventas / Valor inventario actual',
     meta:4, unidad:'veces', color:'blue', freq:'Mensual',
-    autoCalc: null,
-    inputs:[{id:'ri_costoVentas',label:'Costo ventas ($)',ph:'900000'},{id:'ri_invProm',label:'Inventario promedio ($)',ph:'200000'}],
+    autoCalc: (v, g) => {
+      const costoV = g.filter(x=>['materia_prima','insumos','ingredientes'].includes(x.categoria)).reduce((s,x)=>s+Number(x.monto||0),0);
+      const valInv = inventario.reduce((s,p)=>s+(Number(p.stock||0)*Number(p.precio||0)),0);
+      return costoV>0&&valInv>0 ? (costoV/valInv) : null;
+    },
+    inputs:[{id:'ri_costoVentas',label:'Costo ventas ($)',ph:'900000'},{id:'ri_invProm',label:'Valor inventario ($)',ph:'200000'}],
     calc: vals => vals[1]>0 ? (vals[0]/vals[1]) : null,
     status: val => val>=4?'ok':val>=2?'warn':'bad',
     metaLabel:'Meta: ≥ 4 veces/mes' },
@@ -720,9 +764,14 @@ const KPI_DEFS = [
     calc: vals => vals[1]>0 ? (vals[0]/vals[1]*100) : null,
     status: val => val>=30?'ok':val>=15?'warn':'bad',
     metaLabel:'Meta: ≥ 30%' },
-  { id:'ventasTurno', grupo:'Ventas', nombre:'Ventas por Turno', formula:'Ingresos / turno operativo',
+  { id:'ventasTurno', grupo:'Ventas', nombre:'Ventas por Turno', formula:'Ventas totales / días con ventas',
     meta:500000, unidad:'$', color:'red', freq:'Diario',
-    autoCalc: null,
+    autoCalc: (v) => {
+      if(!v.length) return null;
+      const total = v.reduce((s,x)=>s+Number(x.monto||0),0);
+      const dias = new Set(v.map(x=>{ const d=x.fecha?.toDate?.(); return d?d.toDateString():null; }).filter(Boolean)).size;
+      return dias>0 ? (total/dias) : null;
+    },
     inputs:[{id:'vt_ingresos',label:'Ingresos del turno ($)',ph:'520000'}],
     calc: vals => vals[0]>0 ? vals[0] : null,
     status: val => val>=500000?'ok':val>=350000?'warn':'bad',
