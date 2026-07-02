@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="theme-color" content="#0D0D0D"/>
+<title>La Industria · Finanzas</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap"/>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body,#root{height:100%;background:#0D0D0D;}
+  body{overscroll-behavior:none;}
+  input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;}
+  ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-track{background:#1A1A1A;}
+  ::-webkit-scrollbar-thumb{background:#D92B2B;border-radius:2px;}
+  select option{background:#1A1A1A;color:#F0F0F0;}
+  .fade-in{animation:fadeIn .3s ease;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+const { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+        XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } = Recharts;
+
+/* ─── FIREBASE ─────────────────────────────────────────────────── */
+firebase.initializeApp({
+  apiKey: "AIzaSyCy2Zl8LG0CFwru2IxmwJ9KywHV9PIppGY",
+  authDomain: "laindustria-finanzas.firebaseapp.com",
+  projectId: "laindustria-finanzas",
+  storageBucket: "laindustria-finanzas.firebasestorage.app",
+  messagingSenderId: "348512717539",
+  appId: "1:348512717539:web:de025079b83451043093d6"
+});
+const db = firebase.firestore();
+
+/* ─── COLORES & CONSTANTES ─────────────────────────────────────── */
+const C = {
+  red:"#D92B2B", redDark:"#B02020", black:"#0D0D0D", dark:"#1A1A1A",
+  card:"#222222", border:"#333333", muted:"#555555", text:"#F0F0F0",
+  soft:"#AAAAAA", green:"#2ECC71", yellow:"#F1C40F", blue:"#3498DB",
+  orange:"#E67E22", purple:"#9B59B6",
+};
+
+const CATS_GASTO = {
+  materia_prima: { label:"Materia Prima",   color:C.orange,  icon:"🥩" },
+  nomina:        { label:"Nómina",          color:C.blue,    icon:"👥" },
+  fijo:          { label:"Costo Fijo",      color:C.purple,  icon:"🏠" },
+  impuesto:      { label:"Impuesto",        color:C.yellow,  icon:"📋" },
+  operativo:     { label:"Operativo",       color:"#E91E63", icon:"⚙️" },
+  imprevisto:    { label:"Imprevisto",      color:C.red,     icon:"⚠️" },
+};
+
+const MESES      = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+const MESES_FULL = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+const fmt = n => new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n);
+const fmtS = n => n>=1000000?`$${(n/1000000).toFixed(1)}M`:n>=1000?`$${(n/1000).toFixed(0)}K`:`$${n}`;
+const getDate = r => r.fecha?.toDate ? r.fecha.toDate() : r.fecha ? new Date(r.fecha) : null;
+
+/* ─── ESTILOS ──────────────────────────────────────────────────── */
+const S = {
+  wrap:{fontFamily:"'DM Sans',sans-serif",background:C.black,color:C.text,minHeight:"100vh",maxWidth:540,margin:"0 auto",paddingBottom:80},
+  header:{background:`linear-gradient(135deg,${C.dark} 0%,#2a0000 100%)`,padding:"16px 18px 12px",borderBottom:`2px solid ${C.red}`,display:"flex",alignItems:"center",gap:12},
+  logoCircle:{width:42,height:42,borderRadius:"50%",border:`2px solid ${C.red}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0},
+  logoText:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:20,fontWeight:800,letterSpacing:1,color:C.text,lineHeight:1},
+  logoSub:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:9,letterSpacing:3,color:C.red,marginTop:2},
+  monthBar:{background:C.dark,padding:"8px 14px",display:"flex",gap:6,borderBottom:`1px solid ${C.border}`,overflowX:"auto",WebkitOverflowScrolling:"touch"},
+  monthBtn:a=>({padding:"5px 12px",borderRadius:20,background:a?C.red:"transparent",color:a?"#fff":C.soft,border:`1px solid ${a?C.red:C.border}`,fontSize:11,fontWeight:600,whiteSpace:"nowrap",cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:1}),
+  content:{padding:"12px 14px 0"},
+  card:{background:C.card,borderRadius:14,border:`1px solid ${C.border}`,padding:"14px",marginBottom:10},
+  kpiGrid:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12},
+  kpi:c=>({background:C.card,borderRadius:12,border:`1px solid ${C.border}`,borderLeft:`3px solid ${c}`,padding:"12px"}),
+  kpiVal:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,lineHeight:1,marginBottom:3},
+  kpiLabel:{fontSize:10,color:C.soft,letterSpacing:.5},
+  secTitle:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:16,fontWeight:700,letterSpacing:1,marginBottom:10,display:"flex",alignItems:"center",gap:6},
+  badge:c=>({background:c+"22",color:c,borderRadius:8,padding:"2px 8px",fontSize:11,fontWeight:600}),
+  navBar:{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:540,background:C.dark,borderTop:`2px solid ${C.border}`,display:"flex",zIndex:100},
+  navItem:a=>({flex:1,padding:"10px 4px 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:2,cursor:"pointer",background:"transparent",border:"none",borderTop:a?`2px solid ${C.red}`:"2px solid transparent"}),
+  navLabel:a=>({fontSize:9,fontWeight:700,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:1,color:a?C.red:C.muted}),
+  fab:{position:"fixed",bottom:90,right:"calc(50% - 254px)",width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.red},${C.redDark})`,border:"none",color:"#fff",fontSize:28,cursor:"pointer",boxShadow:`0 4px 20px ${C.red}88`,display:"flex",alignItems:"center",justifyContent:"center",zIndex:99},
+  modal:{position:"fixed",inset:0,background:"#000000CC",zIndex:200,display:"flex",alignItems:"flex-end",justifyContent:"center"},
+  modalCard:{background:C.dark,borderRadius:"20px 20px 0 0",width:"100%",maxWidth:540,maxHeight:"90vh",overflowY:"auto",padding:"20px 18px 50px",border:`1px solid ${C.border}`,borderBottom:"none"},
+  handle:{width:40,height:4,background:C.border,borderRadius:2,margin:"0 auto 16px"},
+  input:{width:"100%",background:C.black,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px",color:C.text,fontSize:14,outline:"none",fontFamily:"'DM Sans',sans-serif",marginBottom:8},
+  select:{width:"100%",background:C.black,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px",color:C.text,fontSize:14,outline:"none",fontFamily:"'DM Sans',sans-serif",marginBottom:8,appearance:"none"},
+  btn:v=>({width:"100%",padding:"14px",background:v==="primary"?`linear-gradient(135deg,${C.red},${C.redDark})`:v==="danger"?"#3a0000":C.card,border:v==="primary"?"none":`1px solid ${v==="danger"?C.red:C.border}`,borderRadius:12,color:v==="danger"?C.red:"#fff",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginBottom:8}),
+  row:{display:"flex",alignItems:"center",gap:12,background:C.card,borderRadius:12,border:`1px solid ${C.border}`,padding:"12px 14px",marginBottom:8},
+  label:{fontSize:11,color:C.soft,fontWeight:600,letterSpacing:.5,marginBottom:5,display:"block"},
+  loading:{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:C.black,gap:12},
+};
+
+/* ─── COMPONENTE: DASHBOARD ────────────────────────────────────── */
+function Dashboard({ ventas, gastos, mes, año }) {
+  const mV = ventas.filter(r=>{ const d=getDate(r); return d&&d.getMonth()===mes&&d.getFullYear()===año; });
+  const mG = gastos.filter(r=>{ const d=getDate(r); return d&&d.getMonth()===mes&&d.getFullYear()===año; });
+  const tV = mV.reduce((s,r)=>s+Number(r.monto||0),0);
+  const tG = mG.reduce((s,r)=>s+Number(r.monto||0),0);
+  const util = tV - tG;
+  const pct = tV>0?((util/tV)*100).toFixed(1):"0.0";
+
+  // Evolución 6 meses
+  const evolData = Array.from({length:6},(_,i)=>{
+    const m = (mes-5+i+12)%12;
+    const v = ventas.filter(r=>{ const d=getDate(r); return d&&d.getMonth()===m&&d.getFullYear()===año; }).reduce((s,r)=>s+Number(r.monto||0),0);
+    const g = gastos.filter(r=>{ const d=getDate(r); return d&&d.getMonth()===m&&d.getFullYear()===año; }).reduce((s,r)=>s+Number(r.monto||0),0);
+    return { mes:MESES[m], ventas:v, gastos:g, utilidad:v-g };
+  });
+
+  // Gastos por categoría
+  const catData = Object.entries(CATS_GASTO).map(([k,v])=>({
+    name:v.label, value:mG.filter(r=>r.categoria===k).reduce((s,r)=>s+Number(r.monto||0),0), color:v.color
+  })).filter(d=>d.value>0);
+
+  return (
+    <div className="fade-in">
+      {/* KPIs */}
+      <div style={S.kpiGrid}>
+        <div style={S.kpi(C.green)}><div style={{...S.kpiVal,color:C.green}}>{fmtS(tV)}</div><div style={S.kpiLabel}>VENTAS</div></div>
+        <div style={S.kpi(C.red)}><div style={{...S.kpiVal,color:C.red}}>{fmtS(tG)}</div><div style={S.kpiLabel}>GASTOS</div></div>
+        <div style={S.kpi(util>=0?C.green:C.red)}><div style={{...S.kpiVal,color:util>=0?C.green:C.red}}>{fmtS(util)}</div><div style={S.kpiLabel}>UTILIDAD</div></div>
+        <div style={S.kpi(util>=0?C.green:C.red)}><div style={{...S.kpiVal,color:util>=0?C.green:C.red}}>{pct}%</div><div style={S.kpiLabel}>% MARGEN</div></div>
+      </div>
+
+      {/* Gráfica evolución */}
+      <div style={S.card}>
+        <div style={S.secTitle}>📈 Ventas vs Gastos · 6 meses</div>
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={evolData} margin={{top:0,right:0,left:-20,bottom:0}}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a"/>
+            <XAxis dataKey="mes" tick={{fill:C.soft,fontSize:10}}/>
+            <YAxis tickFormatter={fmtS} tick={{fill:C.soft,fontSize:9}}/>
+            <Tooltip formatter={(v)=>fmt(v)} contentStyle={{background:C.dark,border:`1px solid ${C.border}`,borderRadius:8,fontSize:12}}/>
+            <Bar dataKey="ventas" fill={C.green} radius={[3,3,0,0]} name="Ventas"/>
+            <Bar dataKey="gastos" fill={C.red} radius={[3,3,0,0]} name="Gastos"/>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Gráfica utilidad */}
+      <div style={S.card}>
+        <div style={S.secTitle}>💡 Utilidad Mensual</div>
+        <ResponsiveContainer width="100%" height={160}>
+          <LineChart data={evolData} margin={{top:0,right:0,left:-20,bottom:0}}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a"/>
+            <XAxis dataKey="mes" tick={{fill:C.soft,fontSize:10}}/>
+            <YAxis tickFormatter={fmtS} tick={{fill:C.soft,fontSize:9}}/>
+            <Tooltip formatter={(v)=>fmt(v)} contentStyle={{background:C.dark,border:`1px solid ${C.border}`,borderRadius:8,fontSize:12}}/>
+            <Line type="monotone" dataKey="utilidad" stroke={C.green} strokeWidth={2.5} dot={{fill:C.green,r:4}} name="Utilidad"/>
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Distribución gastos */}
+      {catData.length > 0 && (
+        <div style={S.card}>
+          <div style={S.secTitle}>💸 Distribución de Gastos</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <PieChart>
+              <Pie data={catData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" nameKey="name">
+                {catData.map((d,i)=><Cell key={i} fill={d.color}/>)}
+              </Pie>
+              <Tooltip formatter={(v)=>fmt(v)} contentStyle={{background:C.dark,border:`1px solid ${C.border}`,borderRadius:8,fontSize:12}}/>
+              <Legend iconSize={10} iconType="circle" wrapperStyle={{fontSize:11,color:C.soft}}/>
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── COMPONENTE: LISTA REGISTROS ──────────────────────────────── */
+function ListaRecs({ items, tipo, onDelete }) {
+  if (items.length === 0) return (
+    <div style={{...S.card,textAlign:"center",color:C.muted,padding:"30px 14px"}}>
+      <div style={{fontSize:28,marginBottom:8}}>📭</div>
+      <div style={{fontSize:13}}>Sin registros este mes</div>
+    </div>
+  );
+  return (
+    <div className="fade-in">
+      {items.map(r => {
+        const d = getDate(r);
+        const fecha = d ? d.toLocaleDateString("es-CO",{day:"2-digit",month:"short"}) : "—";
+        const cat = tipo==="gasto" ? (CATS_GASTO[r.categoria]||{label:r.categoria||"Otro",color:C.muted,icon:"📌"}) : null;
+        return (
+          <div key={r.id} style={S.row}>
+            <div style={{fontSize:22,flexShrink:0}}>{tipo==="venta"?"💰":cat?.icon||"💸"}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.concepto||"Sin descripción"}</div>
+              <div style={{fontSize:11,color:C.soft,marginTop:2}}>
+                {fecha}
+                {tipo==="venta" && r.canal && <span style={{...S.badge(C.blue),marginLeft:6,fontSize:9}}>{r.canal}</span>}
+                {tipo==="gasto" && cat && <span style={{...S.badge(cat.color),marginLeft:6,fontSize:9}}>{cat.label}</span>}
+              </div>
+            </div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:16,fontWeight:700,color:tipo==="venta"?C.green:C.red}}>{fmt(r.monto)}</div>
+              <button onClick={()=>onDelete(r.id,"ventas"===tipo?"ventas":"gastos")} style={{background:"none",border:"none",color:C.muted,fontSize:16,cursor:"pointer",padding:"2px 0"}}>🗑</button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─── COMPONENTE: MODAL NUEVO REGISTRO ─────────────────────────── */
+function ModalNuevo({ onClose, onSave }) {
+  const [tipo, setTipo] = useState("venta");
+  const [monto, setMonto] = useState("");
+  const [concepto, setConcepto] = useState("");
+  const [categoria, setCategoria] = useState("materia_prima");
+  const [canal, setCanal] = useState("sitio");
+  const [metodo, setMetodo] = useState("Efectivo");
+  const [fecha, setFecha] = useState(new Date().toISOString().slice(0,10));
+
+  const guardar = () => {
+    if (!monto || isNaN(parseFloat(monto))) return;
+    onSave({ tipo, monto:parseFloat(monto), concepto, categoria, canal, metodo, fecha });
+  };
+
+  return (
+    <div style={S.modal} onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={S.modalCard}>
+        <div style={S.handle}/>
+        <div style={{...S.secTitle,fontSize:18,marginBottom:16}}>➕ Nuevo Registro</div>
+
+        {/* Tipo */}
+        <div style={{display:"flex",gap:8,marginBottom:14}}>
+          {["venta","gasto"].map(t=>(
+            <button key={t} onClick={()=>setTipo(t)} style={{flex:1,padding:"10px",borderRadius:10,background:tipo===t?(t==="venta"?C.green:C.red):C.card,border:`1px solid ${tipo===t?(t==="venta"?C.green:C.red):C.border}`,color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:1}}>
+              {t==="venta"?"💰 VENTA":"💸 GASTO"}
+            </button>
+          ))}
+        </div>
+
+        <label style={S.label}>MONTO (COP)</label>
+        <input type="number" style={S.input} placeholder="0" value={monto} onChange={e=>setMonto(e.target.value)}/>
+
+        <label style={S.label}>DESCRIPCIÓN</label>
+        <input type="text" style={S.input} placeholder={tipo==="venta"?"Ej: Ventas mediodía":"Ej: Compra de carnes"} value={concepto} onChange={e=>setConcepto(e.target.value)}/>
+
+        {tipo==="gasto" && <>
+          <label style={S.label}>CATEGORÍA</label>
+          <select style={S.select} value={categoria} onChange={e=>setCategoria(e.target.value)}>
+            {Object.entries(CATS_GASTO).map(([k,v])=><option key={k} value={k}>{v.icon} {v.label}</option>)}
+          </select>
+        </>}
+
+        {tipo==="venta" && <>
+          <label style={S.label}>CANAL</label>
+          <select style={S.select} value={canal} onChange={e=>setCanal(e.target.value)}>
+            <option value="sitio">🏪 En sitio</option>
+            <option value="domicilio">🛵 Domicilio</option>
+          </select>
+          <label style={S.label}>MÉTODO DE PAGO</label>
+          <select style={S.select} value={metodo} onChange={e=>setMetodo(e.target.value)}>
+            {["Efectivo","Transferencia","Nequi/Daviplata","Tarjeta","Pedidos Ya","Otro"].map(m=><option key={m} value={m}>{m}</option>)}
+          </select>
+        </>}
+
+        <label style={S.label}>FECHA</label>
+        <input type="date" style={S.input} value={fecha} onChange={e=>setFecha(e.target.value)}/>
+
+        <button style={S.btn("primary")} onClick={guardar}>✅ Guardar</button>
+        <button style={S.btn("secondary")} onClick={onClose}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── APP PRINCIPAL ────────────────────────────────────────────── */
+function App() {
+  const [ventas, setVentas]     = useState([]);
+  const [gastos, setGastos]     = useState([]);
+  const [listo, setListo]       = useState(false);
+  const [tab, setTab]           = useState("dashboard");
+  const [mes, setMes]           = useState(new Date().getMonth());
+  const [modal, setModal]       = useState(false);
+  const unsub1 = useRef(null);
+  const unsub2 = useRef(null);
+  const año = new Date().getFullYear();
+
+  useEffect(() => {
+    // Escuchar colección ventas
+    unsub1.current = db.collection("ventas").orderBy("fecha","desc")
+      .onSnapshot(snap => {
+        setVentas(snap.docs.map(d=>({id:d.id,...d.data()})));
+        setListo(true);
+      }, err => console.error("ventas:", err));
+
+    // Escuchar colección gastos
+    unsub2.current = db.collection("gastos").orderBy("fecha","desc")
+      .onSnapshot(snap => {
+        setGastos(snap.docs.map(d=>({id:d.id,...d.data()})));
+        setListo(true);
+      }, err => console.error("gastos:", err));
+
+    return () => { unsub1.current?.(); unsub2.current?.(); };
+  }, []);
+
+  const guardar = async ({ tipo, monto, concepto, categoria, canal, metodo, fecha }) => {
+    const ts = firebase.firestore.Timestamp.fromDate(new Date(fecha + "T12:00:00"));
+    if (tipo === "venta") {
+      await db.collection("ventas").add({ monto, concepto, canal, metodo, fecha:ts });
+    } else {
+      await db.collection("gastos").add({ monto, concepto, categoria, fecha:ts });
+    }
+    setModal(false);
+  };
+
+  const eliminar = async (id, col) => {
+    if (!window.confirm("¿Eliminar este registro?")) return;
+    await db.collection(col).doc(id).delete();
+  };
+
+  if (!listo) return (
+    <div style={S.loading}>
+      <div style={{...S.logoCircle,width:60,height:60,border:`3px solid ${C.red}`}}>
+        <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:C.red}}>LI</span>
+      </div>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:20,fontWeight:700,letterSpacing:2}}>LA INDUSTRIA</div>
+      <div style={{color:C.soft,fontSize:12}}>Conectando...</div>
+    </div>
+  );
+
+  const mVentas = ventas.filter(r=>{ const d=getDate(r); return d&&d.getMonth()===mes&&d.getFullYear()===año; });
+  const mGastos = gastos.filter(r=>{ const d=getDate(r); return d&&d.getMonth()===mes&&d.getFullYear()===año; });
+
+  const nav = [
+    {id:"dashboard",icon:"📊",label:"INICIO"},
+    {id:"ventas",   icon:"💰",label:"VENTAS"},
+    {id:"gastos",   icon:"💸",label:"GASTOS"},
+    {id:"historial",icon:"🗂️",label:"TODO"},
+  ];
+
+  return (
+    <div style={S.wrap}>
+      {/* HEADER */}
+      <div style={S.header}>
+        <div style={S.logoCircle}>
+          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:16,fontWeight:800,color:C.red}}>LI</span>
+        </div>
+        <div>
+          <div style={S.logoText}>LA INDUSTRIA</div>
+          <div style={S.logoSub}>FAST FOOD · GESTIÓN FINANCIERA</div>
+        </div>
+        <div style={{marginLeft:"auto",fontSize:10,color:C.green,fontWeight:600}}>● EN LÍNEA</div>
+      </div>
+
+      {/* SELECTOR DE MES */}
+      <div style={S.monthBar}>
+        {MESES.map((m,i)=>(
+          <button key={m} style={S.monthBtn(i===mes)} onClick={()=>setMes(i)}>{m}</button>
+        ))}
+      </div>
+
+      {/* CONTENIDO */}
+      <div style={S.content}>
+        {tab==="dashboard" && <Dashboard ventas={ventas} gastos={gastos} mes={mes} año={año}/>}
+
+        {tab==="ventas" && <div className="fade-in">
+          <div style={{...S.secTitle,marginBottom:12}}>💰 Ventas — {MESES_FULL[mes]}</div>
+          <div style={{...S.card,display:"flex",justifyContent:"space-between",marginBottom:12}}>
+            <div><div style={{fontSize:11,color:C.soft}}>TOTAL</div><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:C.green}}>{fmt(mVentas.reduce((s,r)=>s+Number(r.monto||0),0))}</div></div>
+            <div style={{textAlign:"right"}}><div style={{fontSize:11,color:C.soft}}>REGISTROS</div><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800}}>{mVentas.length}</div></div>
+          </div>
+          <ListaRecs items={mVentas} tipo="venta" onDelete={(id)=>eliminar(id,"ventas")}/>
+        </div>}
+
+        {tab==="gastos" && <div className="fade-in">
+          <div style={{...S.secTitle,marginBottom:12}}>💸 Gastos — {MESES_FULL[mes]}</div>
+          <div style={{...S.card,display:"flex",justifyContent:"space-between",marginBottom:12}}>
+            <div><div style={{fontSize:11,color:C.soft}}>TOTAL</div><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:C.red}}>{fmt(mGastos.reduce((s,r)=>s+Number(r.monto||0),0))}</div></div>
+            <div style={{textAlign:"right"}}><div style={{fontSize:11,color:C.soft}}>REGISTROS</div><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800}}>{mGastos.length}</div></div>
+          </div>
+          <ListaRecs items={mGastos} tipo="gasto" onDelete={(id)=>eliminar(id,"gastos")}/>
+        </div>}
+
+        {tab==="historial" && <div className="fade-in">
+          <div style={{...S.secTitle,marginBottom:12}}>🗂️ Todos los Registros</div>
+          <div style={{...S.secTitle,fontSize:13,color:C.soft,marginBottom:8}}>VENTAS</div>
+          <ListaRecs items={ventas.slice(0,30)} tipo="venta" onDelete={(id)=>eliminar(id,"ventas")}/>
+          <div style={{...S.secTitle,fontSize:13,color:C.soft,margin:"12px 0 8px"}}>GASTOS</div>
+          <ListaRecs items={gastos.slice(0,30)} tipo="gasto" onDelete={(id)=>eliminar(id,"gastos")}/>
+        </div>}
+      </div>
+
+      {/* FAB */}
+      <button style={S.fab} onClick={()=>setModal(true)}>＋</button>
+
+      {/* NAV */}
+      <div style={S.navBar}>
+        {nav.map(n=>(
+          <button key={n.id} style={S.navItem(tab===n.id)} onClick={()=>setTab(n.id)}>
+            <span style={{fontSize:18}}>{n.icon}</span>
+            <span style={S.navLabel(tab===n.id)}>{n.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {modal && <ModalNuevo onClose={()=>setModal(false)} onSave={guardar}/>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
